@@ -1,0 +1,976 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2709
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 import React, \{ useState, useEffect \} from 'react';\
+import \{ Trophy, User, Lock, Eye, Trash2, Plus, LogOut \} from 'lucide-react';\
+\
+const COURSES = \{\
+  RHCC: \{\
+    name: "RHCC",\
+    holes: [\
+      \{ number: 1, par: 4, yardage: 398 \},\
+      \{ number: 2, par: 3, yardage: 179 \},\
+      \{ number: 3, par: 5, yardage: 520 \},\
+      \{ number: 4, par: 4, yardage: 352 \},\
+      \{ number: 5, par: 4, yardage: 419 \},\
+      \{ number: 6, par: 3, yardage: 194 \},\
+      \{ number: 7, par: 5, yardage: 500 \},\
+      \{ number: 8, par: 4, yardage: 424 \},\
+      \{ number: 9, par: 4, yardage: 412 \}\
+    ]\
+  \}\
+\};\
+\
+export default function GolfTracker() \{\
+  const [mode, setMode] = useState('home');\
+  const [currentUser, setCurrentUser] = useState(null);\
+  const [isCoach, setIsCoach] = useState(false);\
+  const [players, setPlayers] = useState([]);\
+  const [rounds, setRounds] = useState([]);\
+  const [currentRound, setCurrentRound] = useState(null);\
+  const [coachPassword, setCoachPassword] = useState('');\
+\
+\
+\
+  // Load data from storage\
+  useEffect(() => \{\
+    const loadData = async () => \{\
+      try \{\
+        const playersData = await window.storage.get('players');\
+        if (playersData) setPlayers(JSON.parse(playersData.value));\
+      \} catch (error) \{\
+        console.log('No existing players data');\
+      \}\
+      \
+      try \{\
+        const roundsData = await window.storage.get('rounds');\
+        if (roundsData) setRounds(JSON.parse(roundsData.value));\
+      \} catch (error) \{\
+        console.log('No existing rounds data');\
+      \}\
+    \};\
+    loadData();\
+  \}, []);\
+\
+  // Save players\
+  const savePlayers = async (newPlayers) => \{\
+    setPlayers(newPlayers);\
+    try \{\
+      await window.storage.set('players', JSON.stringify(newPlayers));\
+    \} catch (error) \{\
+      console.error('Error saving players:', error);\
+    \}\
+  \};\
+\
+  // Save rounds\
+  const saveRounds = async (newRounds) => \{\
+    setRounds(newRounds);\
+    try \{\
+      await window.storage.set('rounds', JSON.stringify(newRounds));\
+    \} catch (error) \{\
+      console.error('Error saving rounds:', error);\
+    \}\
+  \};\
+\
+  const handlePlayerLogin = (playerName) => \{\
+    let player = players.find(p => p.name === playerName);\
+    if (!player) \{\
+      player = \{ name: playerName, id: Date.now() \};\
+      savePlayers([...players, player]);\
+    \}\
+    setCurrentUser(player);\
+    setMode('playerMenu');\
+  \};\
+\
+  const handleCoachLogin = () => \{\
+    if (coachPassword === 'ROCK') \{\
+      setIsCoach(true);\
+      setMode('coachDashboard');\
+      setCoachPassword('');\
+    \} else \{\
+      alert('Incorrect password');\
+      setCoachPassword('');\
+    \}\
+  \};\
+\
+  const startRound = (courseName) => \{\
+    const course = COURSES[courseName];\
+    const newRound = \{\
+      id: Date.now(),\
+      playerId: currentUser.id,\
+      playerName: currentUser.name,\
+      course: courseName,\
+      date: new Date().toLocaleDateString(),\
+      holes: course.holes.map(h => (\{\
+        ...h,\
+        score: null,\
+        putts: null,\
+        drivePosition: null,\
+        driveDirection: null,\
+        ballFlight: null\
+      \})),\
+      status: 'in-progress',\
+      totalScore: null\
+    \};\
+    setCurrentRound(newRound);\
+    setMode('playRound');\
+  \};\
+\
+  const updateHole = (holeIndex, field, value) => \{\
+    const updated = \{ ...currentRound \};\
+    updated.holes[holeIndex][field] = value;\
+    setCurrentRound(updated);\
+  \};\
+\
+  const completeRound = () => \{\
+    const totalScore = currentRound.holes.reduce((sum, h) => sum + (h.score || 0), 0);\
+    const completedRound = \{\
+      ...currentRound,\
+      totalScore,\
+      status: 'completed'\
+    \};\
+    saveRounds([...rounds, completedRound]);\
+    setCurrentRound(null);\
+    setMode('home');\
+    setCurrentUser(null);\
+  \};\
+\
+  const deletePlayer = async (playerId) => \{\
+    if (window.confirm('Delete this player and all their rounds?')) \{\
+      try \{\
+        const newPlayers = players.filter(p => p.id !== playerId);\
+        const newRounds = rounds.filter(r => r.playerId !== playerId);\
+        \
+        setPlayers(newPlayers);\
+        setRounds(newRounds);\
+        \
+        await window.storage.set('players', JSON.stringify(newPlayers));\
+        await window.storage.set('rounds', JSON.stringify(newRounds));\
+        \
+        console.log('Player deleted successfully');\
+      \} catch (error) \{\
+        console.error('Error deleting player:', error);\
+        alert('Error deleting player. Please try again.');\
+      \}\
+    \}\
+  \};\
+\
+  const logout = () => \{\
+    setCurrentUser(null);\
+    setIsCoach(false);\
+    setCurrentRound(null);\
+    setMode('home');\
+  \};\
+\
+  // Home Screen\
+  if (mode === 'home') \{\
+    return (\
+      <div className="min-h-screen bg-green-50 p-4">\
+        <div className="max-w-md mx-auto">\
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-4">\
+            <h1 className="text-3xl font-bold text-green-800 mb-2 text-center">Rock Hill Golf</h1>\
+            <p className="text-gray-600 text-center mb-6">Welcome to the Bearcat practice round tracker.</p>\
+          </div>\
+\
+          <div className="space-y-3">\
+            <button\
+              onClick=\{() => setMode('playerSelect')\}\
+              className="w-full bg-green-600 text-white py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-green-700"\
+            >\
+              <User size=\{20\} />\
+              Log In\
+            </button>\
+            \
+            <button\
+              onClick=\{() => setMode('newPlayer')\}\
+              className="w-full bg-blue-600 text-white py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-700"\
+            >\
+              <Plus size=\{20\} />\
+              New Player\
+            </button>\
+            \
+            <button\
+              onClick=\{() => setMode('coachLogin')\}\
+              className="w-full bg-gray-600 text-white py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-700"\
+            >\
+              <Lock size=\{20\} />\
+              Coach Login\
+            </button>\
+\
+            <button\
+              onClick=\{() => setMode('viewRounds')\}\
+              className="w-full bg-purple-600 text-white py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-purple-700"\
+            >\
+              <Eye size=\{20\} />\
+              View Rounds\
+            </button>\
+\
+            <button\
+              onClick=\{() => setMode('leaderboard')\}\
+              className="w-full bg-yellow-600 text-white py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-yellow-700"\
+            >\
+              <Trophy size=\{20\} />\
+              Leaderboard\
+            </button>\
+          </div>\
+        </div>\
+      </div>\
+    );\
+  \}\
+\
+  // Player Select Screen\
+  if (mode === 'playerSelect') \{\
+    return (\
+      <div className="min-h-screen bg-green-50 p-4">\
+        <div className="max-w-md mx-auto">\
+          <button onClick=\{() => setMode('home')\} className="mb-4 text-blue-600">\uc0\u8592  Back</button>\
+          <div className="bg-white rounded-lg shadow-lg p-6">\
+            <h2 className="text-2xl font-bold mb-4">Select Your Profile</h2>\
+            \{players.length === 0 ? (\
+              <p className="text-gray-500 text-center py-8">No players yet. Create a new player profile!</p>\
+            ) : (\
+              <div className="space-y-2">\
+                \{players.map(player => (\
+                  <button\
+                    key=\{player.id\}\
+                    onClick=\{() => handlePlayerLogin(player.name)\}\
+                    className="w-full p-4 bg-green-50 hover:bg-green-100 rounded-lg text-left font-semibold transition-colors"\
+                  >\
+                    \{player.name\}\
+                  </button>\
+                ))\}\
+              </div>\
+            )\}\
+          </div>\
+        </div>\
+      </div>\
+    );\
+  \}\
+\
+  // New Player Screen\
+  if (mode === 'newPlayer') \{\
+    return (\
+      <div className="min-h-screen bg-green-50 p-4">\
+        <div className="max-w-md mx-auto">\
+          <button onClick=\{() => setMode('home')\} className="mb-4 text-blue-600">\uc0\u8592  Back</button>\
+          <div className="bg-white rounded-lg shadow-lg p-6">\
+            <h2 className="text-2xl font-bold mb-4">Create New Player</h2>\
+            <NewPlayerForm onCreatePlayer=\{handlePlayerLogin\} />\
+          </div>\
+        </div>\
+      </div>\
+    );\
+  \}\
+\
+  // Coach Login\
+  if (mode === 'coachLogin') \{\
+    return (\
+      <div className="min-h-screen bg-green-50 p-4">\
+        <div className="max-w-md mx-auto">\
+          <button onClick=\{() => setMode('home')\} className="mb-4 text-blue-600">\uc0\u8592  Back</button>\
+          <div className="bg-white rounded-lg shadow-lg p-6">\
+            <h2 className="text-2xl font-bold mb-4">Coach Login</h2>\
+            <input\
+              type="password"\
+              placeholder="Enter password"\
+              value=\{coachPassword\}\
+              onChange=\{(e) => setCoachPassword(e.target.value)\}\
+              className="w-full p-3 border rounded mb-4"\
+              onKeyPress=\{(e) => e.key === 'Enter' && handleCoachLogin()\}\
+            />\
+            <button\
+              onClick=\{handleCoachLogin\}\
+              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700"\
+            >\
+              Login\
+            </button>\
+          </div>\
+        </div>\
+      </div>\
+    );\
+  \}\
+\
+  // Coach Dashboard\
+  if (mode === 'coachDashboard') \{\
+    return (\
+      <div className="min-h-screen bg-green-50 p-4">\
+        <div className="max-w-4xl mx-auto">\
+          <div className="flex justify-between items-center mb-4">\
+            <h2 className="text-2xl font-bold">Coach Dashboard</h2>\
+            <button onClick=\{logout\} className="text-red-600 flex items-center gap-1">\
+              <LogOut size=\{18\} />\
+              Logout\
+            </button>\
+          </div>\
+\
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-4">\
+            <h3 className="text-xl font-bold mb-4">All Players</h3>\
+            \{players.length === 0 ? (\
+              <p className="text-gray-500">No players yet</p>\
+            ) : (\
+              <div className="space-y-2">\
+                \{players.map(player => \{\
+                  const playerRounds = rounds.filter(r => r.playerId === player.id);\
+                  return (\
+                    <div key=\{player.id\} className="flex justify-between items-center p-3 bg-gray-50 rounded">\
+                      <div className="flex-1">\
+                        <p className="font-semibold">\{player.name\}</p>\
+                        <p className="text-sm text-gray-600">\{playerRounds.length\} rounds</p>\
+                      </div>\
+                      <div className="flex gap-2">\
+                        <button\
+                          onClick=\{() => \{\
+                            setCurrentUser(player);\
+                            setMode('coachViewPlayerStats');\
+                          \}\}\
+                          className="text-blue-600 hover:text-blue-800 px-3 py-1 bg-blue-50 rounded"\
+                        >\
+                          Stats\
+                        </button>\
+                        <button\
+                          onClick=\{() => deletePlayer(player.id)\}\
+                          className="text-red-600 hover:text-red-800"\
+                        >\
+                          <Trash2 size=\{20\} />\
+                        </button>\
+                      </div>\
+                    </div>\
+                  );\
+                \})\}\
+              </div>\
+            )\}\
+          </div>\
+\
+          <div className="bg-white rounded-lg shadow-lg p-6">\
+            <h3 className="text-xl font-bold mb-4">All Rounds</h3>\
+            \{rounds.length === 0 ? (\
+              <p className="text-gray-500">No rounds yet</p>\
+            ) : (\
+              <div className="space-y-2">\
+                \{rounds.map(round => (\
+                  <div key=\{round.id\} className="p-3 bg-gray-50 rounded">\
+                    <div className="flex justify-between">\
+                      <p className="font-semibold">\{round.playerName\}</p>\
+                      <p className="font-bold text-green-600">\{round.totalScore || 'In Progress'\}</p>\
+                    </div>\
+                    <p className="text-sm text-gray-600">\{round.course\} - \{round.date\}</p>\
+                    <p className="text-xs text-gray-500">\{round.status\}</p>\
+                  </div>\
+                ))\}\
+              </div>\
+            )\}\
+          </div>\
+        </div>\
+      </div>\
+    );\
+  \}\
+\
+  // Player Menu\
+  if (mode === 'playerMenu') \{\
+    return (\
+      <div className="min-h-screen bg-green-50 p-4">\
+        <div className="max-w-md mx-auto">\
+          <button onClick=\{logout\} className="mb-4 text-blue-600">\uc0\u8592  Logout</button>\
+          <div className="bg-white rounded-lg shadow-lg p-6">\
+            <h2 className="text-2xl font-bold mb-6">Welcome, \{currentUser.name\}!</h2>\
+            \
+            <div className="space-y-3">\
+              <button\
+                onClick=\{() => setMode('selectCourse')\}\
+                className="w-full bg-green-600 text-white py-4 rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"\
+              >\
+                <Plus size=\{20\} />\
+                Start New Round\
+              </button>\
+              \
+              <button\
+                onClick=\{() => setMode('playerRounds')\}\
+                className="w-full bg-blue-600 text-white py-4 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"\
+              >\
+                <Eye size=\{20\} />\
+                View My Rounds\
+              </button>\
+            </div>\
+          </div>\
+        </div>\
+      </div>\
+    );\
+  \}\
+\
+  // Select Course\
+  if (mode === 'selectCourse') \{\
+    return (\
+      <div className="min-h-screen bg-green-50 p-4">\
+        <div className="max-w-md mx-auto">\
+          <button onClick=\{logout\} className="mb-4 text-blue-600">\uc0\u8592  Back</button>\
+          <div className="bg-white rounded-lg shadow-lg p-6">\
+            <h2 className="text-2xl font-bold mb-4">Welcome, \{currentUser.name\}!</h2>\
+            <h3 className="text-lg font-semibold mb-4">Select Course</h3>\
+            \{Object.keys(COURSES).map(courseName => (\
+              <button\
+                key=\{courseName\}\
+                onClick=\{() => startRound(courseName)\}\
+                className="w-full bg-green-600 text-white py-3 rounded-lg mb-2 hover:bg-green-700"\
+              >\
+                \{COURSES[courseName].name\}\
+              </button>\
+            ))\}\
+          </div>\
+        </div>\
+      </div>\
+    );\
+  \}\
+\
+  // Play Round\
+  if (mode === 'playRound' && currentRound) \{\
+    return (\
+      <div className="min-h-screen bg-green-50 p-4 pb-24">\
+        <div className="max-w-md mx-auto">\
+          <div className="bg-white rounded-lg shadow-lg p-4 mb-4">\
+            <h2 className="text-xl font-bold">\{currentRound.course\}</h2>\
+            <p className="text-gray-600">\{currentRound.playerName\} - \{currentRound.date\}</p>\
+          </div>\
+\
+          \{currentRound.holes.map((hole, index) => (\
+            <HoleInput\
+              key=\{hole.number\}\
+              hole=\{hole\}\
+              onUpdate=\{(field, value) => updateHole(index, field, value)\}\
+            />\
+          ))\}\
+\
+          <button\
+            onClick=\{completeRound\}\
+            className="fixed bottom-4 left-4 right-4 max-w-md mx-auto bg-green-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-green-700"\
+          >\
+            Complete Round\
+          </button>\
+        </div>\
+      </div>\
+    );\
+  \}\
+\
+  // View Rounds\
+  if (mode === 'viewRounds') \{\
+    const inProgress = rounds.filter(r => r.status === 'in-progress');\
+    const completed = rounds.filter(r => r.status === 'completed');\
+\
+    return (\
+      <div className="min-h-screen bg-green-50 p-4">\
+        <div className="max-w-md mx-auto">\
+          <button onClick=\{() => setMode('home')\} className="mb-4 text-blue-600">\uc0\u8592  Back</button>\
+          \
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-4">\
+            <h3 className="text-xl font-bold mb-4">In Progress</h3>\
+            \{inProgress.length === 0 ? (\
+              <p className="text-gray-500">No rounds in progress</p>\
+            ) : (\
+              inProgress.map(round => (\
+                <div key=\{round.id\} className="p-3 bg-yellow-50 rounded mb-2">\
+                  <p className="font-semibold">\{round.playerName\}</p>\
+                  <p className="text-sm text-gray-600">\{round.course\} - \{round.date\}</p>\
+                </div>\
+              ))\
+            )\}\
+          </div>\
+\
+          <div className="bg-white rounded-lg shadow-lg p-6">\
+            <h3 className="text-xl font-bold mb-4">Completed</h3>\
+            \{completed.length === 0 ? (\
+              <p className="text-gray-500">No completed rounds</p>\
+            ) : (\
+              completed.map(round => (\
+                <div key=\{round.id\} className="p-3 bg-green-50 rounded mb-2">\
+                  <div className="flex justify-between">\
+                    <p className="font-semibold">\{round.playerName\}</p>\
+                    <p className="font-bold text-green-600">\{round.totalScore\}</p>\
+                  </div>\
+                  <p className="text-sm text-gray-600">\{round.course\} - \{round.date\}</p>\
+                </div>\
+              ))\
+            )\}\
+          </div>\
+        </div>\
+      </div>\
+    );\
+  \}\
+\
+  // Player Rounds View\
+  if (mode === 'playerRounds') \{\
+    const playerRounds = rounds.filter(r => r.playerId === currentUser.id);\
+    const inProgress = playerRounds.filter(r => r.status === 'in-progress');\
+    const completed = playerRounds.filter(r => r.status === 'completed');\
+\
+    return (\
+      <div className="min-h-screen bg-green-50 p-4">\
+        <div className="max-w-md mx-auto">\
+          <button onClick=\{() => setMode('playerMenu')\} className="mb-4 text-blue-600">\uc0\u8592  Back</button>\
+          \
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-4">\
+            <h2 className="text-2xl font-bold mb-4">\{currentUser.name\}'s Rounds</h2>\
+            \
+            <button\
+              onClick=\{() => setMode('playerStats')\}\
+              className="w-full bg-purple-600 text-white py-3 rounded-lg mb-4 hover:bg-purple-700"\
+            >\
+              View My Stats\
+            </button>\
+            \
+            <h3 className="text-lg font-bold mb-3">In Progress</h3>\
+            \{inProgress.length === 0 ? (\
+              <p className="text-gray-500 mb-4">No rounds in progress</p>\
+            ) : (\
+              <div className="space-y-2 mb-4">\
+                \{inProgress.map(round => (\
+                  <div key=\{round.id\} className="p-3 bg-yellow-50 rounded">\
+                    <p className="font-semibold">\{round.course\}</p>\
+                    <p className="text-sm text-gray-600">\{round.date\}</p>\
+                  </div>\
+                ))\}\
+              </div>\
+            )\}\
+\
+            <h3 className="text-lg font-bold mb-3">Completed</h3>\
+            \{completed.length === 0 ? (\
+              <p className="text-gray-500">No completed rounds</p>\
+            ) : (\
+              <div className="space-y-2">\
+                \{completed.map(round => (\
+                  <div key=\{round.id\} className="p-3 bg-green-50 rounded">\
+                    <div className="flex justify-between">\
+                      <p className="font-semibold">\{round.course\}</p>\
+                      <p className="font-bold text-green-600">\{round.totalScore\}</p>\
+                    </div>\
+                    <p className="text-sm text-gray-600">\{round.date\}</p>\
+                  </div>\
+                ))\}\
+              </div>\
+            )\}\
+          </div>\
+        </div>\
+      </div>\
+    );\
+  \}\
+\
+  // Player Stats\
+  if (mode === 'playerStats') \{\
+    const playerRounds = rounds.filter(r => r.playerId === currentUser.id && r.status === 'completed');\
+    const stats = calculatePlayerStats(playerRounds);\
+\
+    return (\
+      <div className="min-h-screen bg-green-50 p-4">\
+        <div className="max-w-md mx-auto">\
+          <button onClick=\{() => setMode('playerRounds')\} className="mb-4 text-blue-600">\uc0\u8592  Back</button>\
+          \
+          <div className="bg-white rounded-lg shadow-lg p-6">\
+            <h2 className="text-2xl font-bold mb-4">\{currentUser.name\}'s Statistics</h2>\
+            \
+            \{playerRounds.length === 0 ? (\
+              <p className="text-gray-500">No completed rounds yet</p>\
+            ) : (\
+              <div className="space-y-4">\
+                <StatCard title="Rounds Played" value=\{stats.roundsPlayed\} />\
+                <StatCard title="Average Score" value=\{stats.avgScore\} />\
+                <StatCard title="Best Score" value=\{stats.bestScore\} />\
+                <StatCard title="Average Putts/Round" value=\{stats.avgPutts\} />\
+                \
+                <div className="border-t pt-4">\
+                  <h3 className="font-bold mb-2">Drive Position</h3>\
+                  <div className="space-y-1">\
+                    <StatBar label="Fairway" value=\{stats.fairwayPct\} color="green" />\
+                    <StatBar label="Rough" value=\{stats.roughPct\} color="yellow" />\
+                    <StatBar label="Green" value=\{stats.greenPct\} color="blue" />\
+                    <StatBar label="OB" value=\{stats.obPct\} color="red" />\
+                  </div>\
+                </div>\
+                \
+                <div className="border-t pt-4">\
+                  <h3 className="font-bold mb-2">Drive Direction</h3>\
+                  <div className="space-y-1">\
+                    <StatBar label="Pull" value=\{stats.pullPct\} color="blue" />\
+                    <StatBar label="Straight" value=\{stats.straightDirPct\} color="green" />\
+                    <StatBar label="Push" value=\{stats.pushPct\} color="red" />\
+                  </div>\
+                </div>\
+                \
+                <div className="border-t pt-4">\
+                  <h3 className="font-bold mb-2">Ball Flight</h3>\
+                  <div className="space-y-1">\
+                    <StatBar label="Draw" value=\{stats.drawPct\} color="blue" />\
+                    <StatBar label="Fade" value=\{stats.fadePct\} color="blue" />\
+                    <StatBar label="Straight" value=\{stats.straightFlightPct\} color="green" />\
+                    <StatBar label="Hook" value=\{stats.hookPct\} color="red" />\
+                    <StatBar label="Slice" value=\{stats.slicePct\} color="red" />\
+                  </div>\
+                </div>\
+              </div>\
+            )\}\
+          </div>\
+        </div>\
+      </div>\
+    );\
+  \}\
+\
+  // Coach View Player Stats\
+  if (mode === 'coachViewPlayerStats') \{\
+    const player = players.find(p => p.id === currentUser.id);\
+    const playerRounds = rounds.filter(r => r.playerId === currentUser.id && r.status === 'completed');\
+    const stats = calculatePlayerStats(playerRounds);\
+\
+    return (\
+      <div className="min-h-screen bg-green-50 p-4">\
+        <div className="max-w-md mx-auto">\
+          <button onClick=\{() => setMode('coachDashboard')\} className="mb-4 text-blue-600">\uc0\u8592  Back</button>\
+          \
+          <div className="bg-white rounded-lg shadow-lg p-6">\
+            <h2 className="text-2xl font-bold mb-4">\{player?.name\}'s Statistics</h2>\
+            \
+            \{playerRounds.length === 0 ? (\
+              <p className="text-gray-500">No completed rounds yet</p>\
+            ) : (\
+              <div className="space-y-4">\
+                <StatCard title="Rounds Played" value=\{stats.roundsPlayed\} />\
+                <StatCard title="Average Score" value=\{stats.avgScore\} />\
+                <StatCard title="Best Score" value=\{stats.bestScore\} />\
+                <StatCard title="Average Putts/Round" value=\{stats.avgPutts\} />\
+                \
+                <div className="border-t pt-4">\
+                  <h3 className="font-bold mb-2">Drive Position</h3>\
+                  <div className="space-y-1">\
+                    <StatBar label="Fairway" value=\{stats.fairwayPct\} color="green" />\
+                    <StatBar label="Rough" value=\{stats.roughPct\} color="yellow" />\
+                    <StatBar label="Green" value=\{stats.greenPct\} color="blue" />\
+                    <StatBar label="OB" value=\{stats.obPct\} color="red" />\
+                  </div>\
+                </div>\
+                \
+                <div className="border-t pt-4">\
+                  <h3 className="font-bold mb-2">Drive Direction</h3>\
+                  <div className="space-y-1">\
+                    <StatBar label="Pull" value=\{stats.pullPct\} color="blue" />\
+                    <StatBar label="Straight" value=\{stats.straightDirPct\} color="green" />\
+                    <StatBar label="Push" value=\{stats.pushPct\} color="red" />\
+                  </div>\
+                </div>\
+                \
+                <div className="border-t pt-4">\
+                  <h3 className="font-bold mb-2">Ball Flight</h3>\
+                  <div className="space-y-1">\
+                    <StatBar label="Draw" value=\{stats.drawPct\} color="blue" />\
+                    <StatBar label="Fade" value=\{stats.fadePct\} color="blue" />\
+                    <StatBar label="Straight" value=\{stats.straightFlightPct\} color="green" />\
+                    <StatBar label="Hook" value=\{stats.hookPct\} color="red" />\
+                    <StatBar label="Slice" value=\{stats.slicePct\} color="red" />\
+                  </div>\
+                </div>\
+              </div>\
+            )\}\
+          </div>\
+        </div>\
+      </div>\
+    );\
+  \}\
+\
+  // Leaderboard\
+  if (mode === 'leaderboard') \{\
+    const completedRounds = rounds.filter(r => r.status === 'completed');\
+    const sorted = [...completedRounds].sort((a, b) => a.totalScore - b.totalScore);\
+\
+    return (\
+      <div className="min-h-screen bg-green-50 p-4">\
+        <div className="max-w-md mx-auto">\
+          <button onClick=\{() => setMode('home')\} className="mb-4 text-blue-600">\uc0\u8592  Back</button>\
+          \
+          <div className="bg-white rounded-lg shadow-lg p-6">\
+            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">\
+              <Trophy className="text-yellow-500" />\
+              Leaderboard\
+            </h2>\
+            \{sorted.length === 0 ? (\
+              <p className="text-gray-500">No completed rounds yet</p>\
+            ) : (\
+              <div className="space-y-2">\
+                \{sorted.map((round, index) => (\
+                  <div key=\{round.id\} className=\{`p-3 rounded $\{index === 0 ? 'bg-yellow-100' : 'bg-gray-50'\}`\}>\
+                    <div className="flex justify-between items-center">\
+                      <div className="flex items-center gap-2">\
+                        <span className="font-bold text-lg">\{index + 1\}.</span>\
+                        <div>\
+                          <p className="font-semibold">\{round.playerName\}</p>\
+                          <p className="text-xs text-gray-600">\{round.course\} - \{round.date\}</p>\
+                        </div>\
+                      </div>\
+                      <p className="text-2xl font-bold text-green-600">\{round.totalScore\}</p>\
+                    </div>\
+                  </div>\
+                ))\}\
+              </div>\
+            )\}\
+          </div>\
+        </div>\
+      </div>\
+    );\
+  \}\
+\
+  return null;\
+\}\
+\
+// Helper function to calculate player statistics\
+function calculatePlayerStats(completedRounds) \{\
+  if (completedRounds.length === 0) \{\
+    return \{\
+      roundsPlayed: 0,\
+      avgScore: 0,\
+      bestScore: 0,\
+      avgPutts: 0,\
+      fairwayPct: 0,\
+      roughPct: 0,\
+      greenPct: 0,\
+      obPct: 0,\
+      pullPct: 0,\
+      straightDirPct: 0,\
+      pushPct: 0,\
+      drawPct: 0,\
+      fadePct: 0,\
+      straightFlightPct: 0,\
+      hookPct: 0,\
+      slicePct: 0\
+    \};\
+  \}\
+\
+  const totalScore = completedRounds.reduce((sum, r) => sum + r.totalScore, 0);\
+  const avgScore = (totalScore / completedRounds.length).toFixed(1);\
+  const bestScore = Math.min(...completedRounds.map(r => r.totalScore));\
+\
+  let totalPutts = 0;\
+  let positionCounts = \{ Fairway: 0, Rough: 0, Green: 0, OB: 0 \};\
+  let directionCounts = \{ Pull: 0, Straight: 0, Push: 0 \};\
+  let flightCounts = \{ Draw: 0, Fade: 0, Straight: 0, Hook: 0, Slice: 0 \};\
+  let totalDrives = 0;\
+\
+  completedRounds.forEach(round => \{\
+    round.holes.forEach(hole => \{\
+      if (hole.putts) totalPutts += hole.putts;\
+      if (hole.drivePosition) \{\
+        positionCounts[hole.drivePosition]++;\
+        totalDrives++;\
+      \}\
+      if (hole.driveDirection) directionCounts[hole.driveDirection]++;\
+      if (hole.ballFlight) flightCounts[hole.ballFlight]++;\
+    \});\
+  \});\
+\
+  const avgPutts = (totalPutts / completedRounds.length).toFixed(1);\
+\
+  return \{\
+    roundsPlayed: completedRounds.length,\
+    avgScore,\
+    bestScore,\
+    avgPutts,\
+    fairwayPct: totalDrives ? ((positionCounts.Fairway / totalDrives) * 100).toFixed(1) : 0,\
+    roughPct: totalDrives ? ((positionCounts.Rough / totalDrives) * 100).toFixed(1) : 0,\
+    greenPct: totalDrives ? ((positionCounts.Green / totalDrives) * 100).toFixed(1) : 0,\
+    obPct: totalDrives ? ((positionCounts.OB / totalDrives) * 100).toFixed(1) : 0,\
+    pullPct: totalDrives ? ((directionCounts.Pull / totalDrives) * 100).toFixed(1) : 0,\
+    straightDirPct: totalDrives ? ((directionCounts.Straight / totalDrives) * 100).toFixed(1) : 0,\
+    pushPct: totalDrives ? ((directionCounts.Push / totalDrives) * 100).toFixed(1) : 0,\
+    drawPct: totalDrives ? ((flightCounts.Draw / totalDrives) * 100).toFixed(1) : 0,\
+    fadePct: totalDrives ? ((flightCounts.Fade / totalDrives) * 100).toFixed(1) : 0,\
+    straightFlightPct: totalDrives ? ((flightCounts.Straight / totalDrives) * 100).toFixed(1) : 0,\
+    hookPct: totalDrives ? ((flightCounts.Hook / totalDrives) * 100).toFixed(1) : 0,\
+    slicePct: totalDrives ? ((flightCounts.Slice / totalDrives) * 100).toFixed(1) : 0\
+  \};\
+\}\
+\
+function StatCard(\{ title, value \}) \{\
+  return (\
+    <div className="bg-gray-50 p-4 rounded-lg">\
+      <p className="text-sm text-gray-600">\{title\}</p>\
+      <p className="text-2xl font-bold">\{value\}</p>\
+    </div>\
+  );\
+\}\
+\
+function StatBar(\{ label, value, color \}) \{\
+  const colorClasses = \{\
+    green: 'bg-green-500',\
+    yellow: 'bg-yellow-500',\
+    blue: 'bg-blue-500',\
+    red: 'bg-red-500'\
+  \};\
+\
+  return (\
+    <div>\
+      <div className="flex justify-between text-sm mb-1">\
+        <span>\{label\}</span>\
+        <span className="font-semibold">\{value\}%</span>\
+      </div>\
+      <div className="w-full bg-gray-200 rounded-full h-2">\
+        <div\
+          className=\{`$\{colorClasses[color]\} h-2 rounded-full`\}\
+          style=\{\{ width: `$\{value\}%` \}\}\
+        />\
+      </div>\
+    </div>\
+  );\
+\}\
+\
+function NewPlayerForm(\{ onCreatePlayer \}) \{\
+  const [name, setName] = useState('');\
+\
+  const handleSubmit = () => \{\
+    if (name.trim()) \{\
+      onCreatePlayer(name.trim());\
+      setName('');\
+    \}\
+  \};\
+\
+  return (\
+    <div>\
+      <input\
+        type="text"\
+        placeholder="Enter player name"\
+        value=\{name\}\
+        onChange=\{(e) => setName(e.target.value)\}\
+        onKeyPress=\{(e) => e.key === 'Enter' && handleSubmit()\}\
+        className="w-full p-3 border rounded mb-3"\
+      />\
+      <button\
+        onClick=\{handleSubmit\}\
+        className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700"\
+      >\
+        Create Player\
+      </button>\
+    </div>\
+  );\
+\}\
+\
+function PlayerLoginForm(\{ onLogin \}) \{\
+  const [name, setName] = useState('');\
+\
+  const handleSubmit = () => \{\
+    if (name.trim()) \{\
+      onLogin(name.trim());\
+      setName('');\
+    \}\
+  \};\
+\
+  return (\
+    <div className="bg-white rounded-lg shadow-lg p-6">\
+      <h3 className="text-lg font-semibold mb-3">Player Login</h3>\
+      <input\
+        type="text"\
+        placeholder="Enter your name"\
+        value=\{name\}\
+        onChange=\{(e) => setName(e.target.value)\}\
+        onKeyPress=\{(e) => e.key === 'Enter' && handleSubmit()\}\
+        className="w-full p-3 border rounded mb-3"\
+      />\
+      <button\
+        onClick=\{handleSubmit\}\
+        className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"\
+      >\
+        <User size=\{20\} />\
+        Start Round\
+      </button>\
+    </div>\
+  );\
+\}\
+\
+function HoleInput(\{ hole, onUpdate \}) \{\
+  return (\
+    <div className="bg-white rounded-lg shadow p-4 mb-3">\
+      <div className="flex justify-between mb-3">\
+        <h3 className="text-lg font-bold">Hole \{hole.number\}</h3>\
+        <div className="text-right">\
+          <p className="text-sm text-gray-600">\{hole.yardage\} yards</p>\
+          <p className="text-sm font-semibold">Par \{hole.par\}</p>\
+        </div>\
+      </div>\
+\
+      <div className="grid grid-cols-2 gap-3 mb-3">\
+        <div>\
+          <label className="block text-sm font-medium mb-1">Score</label>\
+          <input\
+            type="number"\
+            min="1"\
+            value=\{hole.score || ''\}\
+            onChange=\{(e) => onUpdate('score', parseInt(e.target.value) || null)\}\
+            className="w-full p-2 border rounded"\
+          />\
+        </div>\
+        <div>\
+          <label className="block text-sm font-medium mb-1">Putts</label>\
+          <input\
+            type="number"\
+            min="0"\
+            value=\{hole.putts || ''\}\
+            onChange=\{(e) => onUpdate('putts', parseInt(e.target.value) || null)\}\
+            className="w-full p-2 border rounded"\
+          />\
+        </div>\
+      </div>\
+\
+      <div className="mb-2">\
+        <label className="block text-sm font-medium mb-1">Drive Position</label>\
+        <div className="grid grid-cols-4 gap-2">\
+          \{['Fairway', 'Rough', 'OB', 'Green'].map(pos => (\
+            <button\
+              key=\{pos\}\
+              onClick=\{() => onUpdate('drivePosition', pos)\}\
+              className=\{`p-2 rounded text-sm $\{\
+                hole.drivePosition === pos\
+                  ? 'bg-green-600 text-white'\
+                  : 'bg-gray-200'\
+              \}`\}\
+            >\
+              \{pos\}\
+            </button>\
+          ))\}\
+        </div>\
+      </div>\
+\
+      <div className="mb-2">\
+        <label className="block text-sm font-medium mb-1">Drive Direction</label>\
+        <div className="grid grid-cols-3 gap-2">\
+          \{['Pull', 'Straight', 'Push'].map(dir => (\
+            <button\
+              key=\{dir\}\
+              onClick=\{() => onUpdate('driveDirection', dir)\}\
+              className=\{`p-2 rounded text-sm $\{\
+                hole.driveDirection === dir\
+                  ? 'bg-blue-600 text-white'\
+                  : 'bg-gray-200'\
+              \}`\}\
+            >\
+              \{dir\}\
+            </button>\
+          ))\}\
+        </div>\
+      </div>\
+\
+      <div>\
+        <label className="block text-sm font-medium mb-1">Ball Flight</label>\
+        <div className="grid grid-cols-5 gap-2">\
+          \{['Draw', 'Fade', 'Hook', 'Slice', 'Straight'].map(flight => (\
+            <button\
+              key=\{flight\}\
+              onClick=\{() => onUpdate('ballFlight', flight)\}\
+              className=\{`p-2 rounded text-sm $\{\
+                hole.ballFlight === flight\
+                  ? 'bg-purple-600 text-white'\
+                  : 'bg-gray-200'\
+              \}`\}\
+            >\
+              \{flight\}\
+            </button>\
+          ))\}\
+        </div>\
+      </div>\
+    </div>\
+  );\
+\}}
