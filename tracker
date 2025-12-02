@@ -1,0 +1,517 @@
+import React, { useState, useEffect } from 'react';
+import { Trophy, User, Lock, Eye, Trash2, Plus, LogOut } from 'lucide-react';
+
+const COURSES = {
+  RHCC: {
+    name: "RHCC",
+    holes: [
+      { number: 1, par: 4, yardage: 398 },
+      { number: 2, par: 3, yardage: 179 },
+      { number: 3, par: 5, yardage: 520 },
+      { number: 4, par: 4, yardage: 352 },
+      { number: 5, par: 4, yardage: 419 },
+      { number: 6, par: 3, yardage: 194 },
+      { number: 7, par: 5, yardage: 500 },
+      { number: 8, par: 4, yardage: 424 },
+      { number: 9, par: 4, yardage: 412 }
+    ]
+  }
+};
+
+export default function GolfTracker() {
+  const [mode, setMode] = useState('home');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isCoach, setIsCoach] = useState(false);
+  const [players, setPlayers] = useState([]);
+  const [rounds, setRounds] = useState([]);
+  const [currentRound, setCurrentRound] = useState(null);
+  const [coachPassword, setCoachPassword] = useState('');
+
+  // Load data from storage
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const playersData = await window.storage.get('players');
+        const roundsData = await window.storage.get('rounds');
+        
+        if (playersData) setPlayers(JSON.parse(playersData.value));
+        if (roundsData) setRounds(JSON.parse(roundsData.value));
+      } catch (error) {
+        console.log('No existing data');
+      }
+    };
+    loadData();
+  }, []);
+
+  // Save players
+  const savePlayers = async (newPlayers) => {
+    setPlayers(newPlayers);
+    await window.storage.set('players', JSON.stringify(newPlayers));
+  };
+
+  // Save rounds
+  const saveRounds = async (newRounds) => {
+    setRounds(newRounds);
+    await window.storage.set('rounds', JSON.stringify(newRounds));
+  };
+
+  const handlePlayerLogin = (playerName) => {
+    let player = players.find(p => p.name === playerName);
+    if (!player) {
+      player = { name: playerName, id: Date.now() };
+      savePlayers([...players, player]);
+    }
+    setCurrentUser(player);
+    setMode('selectCourse');
+  };
+
+  const handleCoachLogin = () => {
+    if (coachPassword === 'ROCK') {
+      setIsCoach(true);
+      setMode('coachDashboard');
+      setCoachPassword('');
+    } else {
+      alert('Incorrect password');
+      setCoachPassword('');
+    }
+  };
+
+  const startRound = (courseName) => {
+    const course = COURSES[courseName];
+    const newRound = {
+      id: Date.now(),
+      playerId: currentUser.id,
+      playerName: currentUser.name,
+      course: courseName,
+      date: new Date().toLocaleDateString(),
+      holes: course.holes.map(h => ({
+        ...h,
+        score: null,
+        putts: null,
+        drivePosition: null,
+        driveDirection: null
+      })),
+      status: 'in-progress',
+      totalScore: null
+    };
+    setCurrentRound(newRound);
+    setMode('playRound');
+  };
+
+  const updateHole = (holeIndex, field, value) => {
+    const updated = { ...currentRound };
+    updated.holes[holeIndex][field] = value;
+    setCurrentRound(updated);
+  };
+
+  const completeRound = () => {
+    const totalScore = currentRound.holes.reduce((sum, h) => sum + (h.score || 0), 0);
+    const completedRound = {
+      ...currentRound,
+      totalScore,
+      status: 'completed'
+    };
+    saveRounds([...rounds, completedRound]);
+    setCurrentRound(null);
+    setMode('home');
+    setCurrentUser(null);
+  };
+
+  const deletePlayer = async (playerId) => {
+    if (window.confirm('Delete this player and all their rounds?')) {
+      const newPlayers = players.filter(p => p.id !== playerId);
+      const newRounds = rounds.filter(r => r.playerId !== playerId);
+      await savePlayers(newPlayers);
+      await saveRounds(newRounds);
+    }
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    setIsCoach(false);
+    setCurrentRound(null);
+    setMode('home');
+  };
+
+  // Home Screen
+  if (mode === 'home') {
+    return (
+      <div className="min-h-screen bg-green-50 p-4">
+        <div className="max-w-md mx-auto">
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-4">
+            <h1 className="text-3xl font-bold text-green-800 mb-2 text-center">Golf Practice Tracker</h1>
+            <p className="text-gray-600 text-center mb-6">Track your rounds and compete</p>
+          </div>
+
+          <div className="space-y-3">
+            <PlayerLoginForm onLogin={handlePlayerLogin} />
+            
+            <button
+              onClick={() => setMode('coachLogin')}
+              className="w-full bg-blue-600 text-white py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-700"
+            >
+              <Lock size={20} />
+              Coach Login
+            </button>
+
+            <button
+              onClick={() => setMode('viewRounds')}
+              className="w-full bg-gray-600 text-white py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-700"
+            >
+              <Eye size={20} />
+              View Rounds
+            </button>
+
+            <button
+              onClick={() => setMode('leaderboard')}
+              className="w-full bg-yellow-600 text-white py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-yellow-700"
+            >
+              <Trophy size={20} />
+              Leaderboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Coach Login
+  if (mode === 'coachLogin') {
+    return (
+      <div className="min-h-screen bg-green-50 p-4">
+        <div className="max-w-md mx-auto">
+          <button onClick={() => setMode('home')} className="mb-4 text-blue-600">← Back</button>
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-2xl font-bold mb-4">Coach Login</h2>
+            <input
+              type="password"
+              placeholder="Enter password"
+              value={coachPassword}
+              onChange={(e) => setCoachPassword(e.target.value)}
+              className="w-full p-3 border rounded mb-4"
+              onKeyPress={(e) => e.key === 'Enter' && handleCoachLogin()}
+            />
+            <button
+              onClick={handleCoachLogin}
+              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700"
+            >
+              Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Coach Dashboard
+  if (mode === 'coachDashboard') {
+    return (
+      <div className="min-h-screen bg-green-50 p-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">Coach Dashboard</h2>
+            <button onClick={logout} className="text-red-600 flex items-center gap-1">
+              <LogOut size={18} />
+              Logout
+            </button>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-4">
+            <h3 className="text-xl font-bold mb-4">All Players</h3>
+            {players.length === 0 ? (
+              <p className="text-gray-500">No players yet</p>
+            ) : (
+              <div className="space-y-2">
+                {players.map(player => {
+                  const playerRounds = rounds.filter(r => r.playerId === player.id);
+                  return (
+                    <div key={player.id} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                      <div>
+                        <p className="font-semibold">{player.name}</p>
+                        <p className="text-sm text-gray-600">{playerRounds.length} rounds</p>
+                      </div>
+                      <button
+                        onClick={() => deletePlayer(player.id)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h3 className="text-xl font-bold mb-4">All Rounds</h3>
+            {rounds.length === 0 ? (
+              <p className="text-gray-500">No rounds yet</p>
+            ) : (
+              <div className="space-y-2">
+                {rounds.map(round => (
+                  <div key={round.id} className="p-3 bg-gray-50 rounded">
+                    <div className="flex justify-between">
+                      <p className="font-semibold">{round.playerName}</p>
+                      <p className="font-bold text-green-600">{round.totalScore || 'In Progress'}</p>
+                    </div>
+                    <p className="text-sm text-gray-600">{round.course} - {round.date}</p>
+                    <p className="text-xs text-gray-500">{round.status}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Select Course
+  if (mode === 'selectCourse') {
+    return (
+      <div className="min-h-screen bg-green-50 p-4">
+        <div className="max-w-md mx-auto">
+          <button onClick={logout} className="mb-4 text-blue-600">← Back</button>
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-2xl font-bold mb-4">Welcome, {currentUser.name}!</h2>
+            <h3 className="text-lg font-semibold mb-4">Select Course</h3>
+            {Object.keys(COURSES).map(courseName => (
+              <button
+                key={courseName}
+                onClick={() => startRound(courseName)}
+                className="w-full bg-green-600 text-white py-3 rounded-lg mb-2 hover:bg-green-700"
+              >
+                {COURSES[courseName].name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Play Round
+  if (mode === 'playRound' && currentRound) {
+    return (
+      <div className="min-h-screen bg-green-50 p-4 pb-24">
+        <div className="max-w-md mx-auto">
+          <div className="bg-white rounded-lg shadow-lg p-4 mb-4">
+            <h2 className="text-xl font-bold">{currentRound.course}</h2>
+            <p className="text-gray-600">{currentRound.playerName} - {currentRound.date}</p>
+          </div>
+
+          {currentRound.holes.map((hole, index) => (
+            <HoleInput
+              key={hole.number}
+              hole={hole}
+              onUpdate={(field, value) => updateHole(index, field, value)}
+            />
+          ))}
+
+          <button
+            onClick={completeRound}
+            className="fixed bottom-4 left-4 right-4 max-w-md mx-auto bg-green-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-green-700"
+          >
+            Complete Round
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // View Rounds
+  if (mode === 'viewRounds') {
+    const inProgress = rounds.filter(r => r.status === 'in-progress');
+    const completed = rounds.filter(r => r.status === 'completed');
+
+    return (
+      <div className="min-h-screen bg-green-50 p-4">
+        <div className="max-w-md mx-auto">
+          <button onClick={() => setMode('home')} className="mb-4 text-blue-600">← Back</button>
+          
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-4">
+            <h3 className="text-xl font-bold mb-4">In Progress</h3>
+            {inProgress.length === 0 ? (
+              <p className="text-gray-500">No rounds in progress</p>
+            ) : (
+              inProgress.map(round => (
+                <div key={round.id} className="p-3 bg-yellow-50 rounded mb-2">
+                  <p className="font-semibold">{round.playerName}</p>
+                  <p className="text-sm text-gray-600">{round.course} - {round.date}</p>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h3 className="text-xl font-bold mb-4">Completed</h3>
+            {completed.length === 0 ? (
+              <p className="text-gray-500">No completed rounds</p>
+            ) : (
+              completed.map(round => (
+                <div key={round.id} className="p-3 bg-green-50 rounded mb-2">
+                  <div className="flex justify-between">
+                    <p className="font-semibold">{round.playerName}</p>
+                    <p className="font-bold text-green-600">{round.totalScore}</p>
+                  </div>
+                  <p className="text-sm text-gray-600">{round.course} - {round.date}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Leaderboard
+  if (mode === 'leaderboard') {
+    const completedRounds = rounds.filter(r => r.status === 'completed');
+    const sorted = [...completedRounds].sort((a, b) => a.totalScore - b.totalScore);
+
+    return (
+      <div className="min-h-screen bg-green-50 p-4">
+        <div className="max-w-md mx-auto">
+          <button onClick={() => setMode('home')} className="mb-4 text-blue-600">← Back</button>
+          
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+              <Trophy className="text-yellow-500" />
+              Leaderboard
+            </h2>
+            {sorted.length === 0 ? (
+              <p className="text-gray-500">No completed rounds yet</p>
+            ) : (
+              <div className="space-y-2">
+                {sorted.map((round, index) => (
+                  <div key={round.id} className={`p-3 rounded ${index === 0 ? 'bg-yellow-100' : 'bg-gray-50'}`}>
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-lg">{index + 1}.</span>
+                        <div>
+                          <p className="font-semibold">{round.playerName}</p>
+                          <p className="text-xs text-gray-600">{round.course} - {round.date}</p>
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-green-600">{round.totalScore}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function PlayerLoginForm({ onLogin }) {
+  const [name, setName] = useState('');
+
+  const handleSubmit = () => {
+    if (name.trim()) {
+      onLogin(name.trim());
+      setName('');
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-6">
+      <h3 className="text-lg font-semibold mb-3">Player Login</h3>
+      <input
+        type="text"
+        placeholder="Enter your name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
+        className="w-full p-3 border rounded mb-3"
+      />
+      <button
+        onClick={handleSubmit}
+        className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
+      >
+        <User size={20} />
+        Start Round
+      </button>
+    </div>
+  );
+}
+
+function HoleInput({ hole, onUpdate }) {
+  return (
+    <div className="bg-white rounded-lg shadow p-4 mb-3">
+      <div className="flex justify-between mb-3">
+        <h3 className="text-lg font-bold">Hole {hole.number}</h3>
+        <div className="text-right">
+          <p className="text-sm text-gray-600">{hole.yardage} yards</p>
+          <p className="text-sm font-semibold">Par {hole.par}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">Score</label>
+          <input
+            type="number"
+            min="1"
+            value={hole.score || ''}
+            onChange={(e) => onUpdate('score', parseInt(e.target.value) || null)}
+            className="w-full p-2 border rounded"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Putts</label>
+          <input
+            type="number"
+            min="0"
+            value={hole.putts || ''}
+            onChange={(e) => onUpdate('putts', parseInt(e.target.value) || null)}
+            className="w-full p-2 border rounded"
+          />
+        </div>
+      </div>
+
+      <div className="mb-2">
+        <label className="block text-sm font-medium mb-1">Drive Position</label>
+        <div className="grid grid-cols-3 gap-2">
+          {['Fairway', 'Rough', 'OB'].map(pos => (
+            <button
+              key={pos}
+              onClick={() => onUpdate('drivePosition', pos)}
+              className={`p-2 rounded text-sm ${
+                hole.drivePosition === pos
+                  ? 'bg-green-600 text-white'
+                  : 'bg-gray-200'
+              }`}
+            >
+              {pos}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Drive Direction</label>
+        <div className="grid grid-cols-3 gap-2">
+          {['Left', 'Straight', 'Right'].map(dir => (
+            <button
+              key={dir}
+              onClick={() => onUpdate('driveDirection', dir)}
+              className={`p-2 rounded text-sm ${
+                hole.driveDirection === dir
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200'
+              }`}
+            >
+              {dir}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
